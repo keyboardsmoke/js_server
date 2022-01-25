@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"js_server/api"
 	"net/http"
@@ -8,38 +9,47 @@ import (
 	"os"
 	"strings"
 
-	"github.com/robertkrimen/otto"
+	v8 "rogchap.com/v8go"
 )
 
-func openVmFile(vm *otto.Otto, filename string) error {
+func openVmFile(iso *v8.Isolate, ctx *v8.Context, global *v8.ObjectTemplate, filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	vm.Run(f)
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(f)
+	contents := buf.String()
+
+	_, err = ctx.RunScript(contents, filename)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func createVm(w http.ResponseWriter, r *http.Request) *otto.Otto {
-	vm := otto.New()
+func createVm(w http.ResponseWriter, r *http.Request) (*v8.Isolate, *v8.ObjectTemplate) {
+	iso := v8.NewIsolate()
+	global := v8.NewObjectTemplate(iso)
+	return iso, global
+}
 
+func createCtx(iso *v8.Isolate, global *v8.ObjectTemplate) *v8.Context {
+	return v8.NewContext(iso, global)
+}
+
+func fillHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	w.Header().Set("X-Powered-By", "Otto")
-	w.Header().Set("X-Otto-Version", "1.0")
-	w.Header().Set("X-Otto-Request-Method", r.Method)
-	w.Header().Set("X-Otto-Request-URL", r.URL.RequestURI())
-	w.Header().Set("X-Otto-Request-Proto", r.Proto)
-	w.Header().Set("X-Otto-Request-Host", r.Host)
-	w.Header().Set("X-Otto-Request-Path", r.URL.Path)
-	w.Header().Set("X-Otto-Request-Query", r.URL.RawQuery)
-
-	// Register all native API functions
-	api.RegisterApi(vm, w, r)
-
-	return vm
+	w.Header().Set("X-Powered-By", "v8go")
+	w.Header().Set("X-v8-Version", v8.Version())
+	w.Header().Set("X-v8-Request-Method", r.Method)
+	w.Header().Set("X-v8-Request-URL", r.URL.RequestURI())
+	w.Header().Set("X-v8-Request-Proto", r.Proto)
+	w.Header().Set("X-v8-Request-Host", r.Host)
+	w.Header().Set("X-v8-Request-Path", r.URL.Path)
 }
 
 type FCGIHandler struct {
@@ -74,10 +84,21 @@ func (f *FCGIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vm := createVm(w, r)
-	err := openVmFile(vm, cgiEnv["SCRIPT_FILENAME"])
-	if err != nil {
-		fmt.Fprintln(w, err)
+	fillHeader(w, r)
+
+	iso, global := createVm(w, r)
+
+	ae := api.RegisterApi(iso, global, w, r)
+	if ae != nil {
+		fmt.Fprintln(w, ae)
+		return
+	}
+
+	ctx := createCtx(iso, global)
+
+	ve := openVmFile(iso, ctx, global, cgiEnv["SCRIPT_FILENAME"])
+	if ve != nil {
+		fmt.Fprintln(w, ve)
 	}
 }
 

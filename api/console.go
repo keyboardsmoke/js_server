@@ -3,22 +3,27 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
-	"github.com/robertkrimen/otto"
+	v8 "rogchap.com/v8go"
 )
 
-func RegisterConsoleApi(vm *otto.Otto, w http.ResponseWriter, r *http.Request) error {
+func RegisterConsoleApi(iso *v8.Isolate, global *v8.ObjectTemplate, w http.ResponseWriter, r *http.Request) error {
 
-	obj, err := vm.Object("console")
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
+	console := v8.NewObjectTemplate(iso)
 
-	obj.Set("log", func(call otto.FunctionCall) otto.Value {
-		fmt.Println(call.Argument(0).String())
-		return otto.Value{}
-	})
+	console.Set("log", v8.NewFunctionTemplate(iso, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		v := fmt.Sprintf("%v", info.Args())
+		if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
+			v = v[1 : len(v)-1]
+		}
+
+		fmt.Fprintf(os.Stdout, v)
+		return nil
+	}))
+
+	global.Set("console", console)
 
 	return nil
 }

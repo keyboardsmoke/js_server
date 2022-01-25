@@ -2,4 +2,4 @@ module js_server
 
 go 1.14
 
-require github.com/robertkrimen/otto v0.0.0-20211024170158-b87d35c0b86f
+require rogchap.com/v8go v0.7.0
