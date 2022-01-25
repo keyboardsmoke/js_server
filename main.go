@@ -36,6 +36,7 @@ func createVm(w http.ResponseWriter, r *http.Request) *otto.Otto {
 	w.Header().Set("X-Otto-Request-Path", r.URL.Path)
 	w.Header().Set("X-Otto-Request-Query", r.URL.RawQuery)
 
+	// Register all native API functions
 	api.RegisterApi(vm, w, r)
 
 	return vm
@@ -68,8 +69,6 @@ func (f *FCGIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Proto: ", r.Proto, "<br /><br />")
 		fmt.Fprintln(w, "Host: ", r.Host, "<br /><br />")
 		fmt.Fprintln(w, "Form: ", r.Form, "<br /><br />")
-		fmt.Fprintln(w, "Environment: ", os.Environ(), "<br /><br />")
-
 		fmt.Fprintln(w, "fcgi.ProcessEnv: ", cgiEnv, "<br />")
 
 		return
@@ -83,5 +82,8 @@ func (f *FCGIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	fcgi.Serve(nil, &FCGIHandler{})
+	err := fcgi.Serve(nil, &FCGIHandler{})
+	if err != nil {
+		panic(err)
+	}
 }
