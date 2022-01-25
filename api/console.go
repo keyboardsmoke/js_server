@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	vm "js_server/vm"
 	"net/http"
 	"os"
 	"strings"
@@ -9,11 +10,11 @@ import (
 	v8 "rogchap.com/v8go"
 )
 
-func RegisterConsoleApi(iso *v8.Isolate, global *v8.ObjectTemplate, w http.ResponseWriter, r *http.Request) error {
+func RegisterConsoleApi(v *vm.Vm, w http.ResponseWriter, r *http.Request) error {
 
-	console := v8.NewObjectTemplate(iso)
+	console := v8.NewObjectTemplate(v.Iso)
 
-	console.Set("log", v8.NewFunctionTemplate(iso, func(info *v8.FunctionCallbackInfo) *v8.Value {
+	console.Set("log", v8.NewFunctionTemplate(v.Iso, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		v := fmt.Sprintf("%v", info.Args())
 		if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
 			v = v[1 : len(v)-1]
@@ -23,7 +24,7 @@ func RegisterConsoleApi(iso *v8.Isolate, global *v8.ObjectTemplate, w http.Respo
 		return nil
 	}))
 
-	global.Set("console", console)
+	v.Global.Set("console", console)
 
 	return nil
 }
